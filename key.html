@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HongHac - Get Key</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+        .logo {
+            font-size: 48px;
+            font-weight: bold;
+            color: #EF4444;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(239,68,68,0.5);
+        }
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 30px;
+        }
+        .key-box {
+            background: #1e293b;
+            border: 2px solid #EF4444;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .key-label {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        #keyDisplay {
+            font-family: 'Consolas', monospace;
+            font-size: 22px;
+            color: #10B981;
+            word-break: break-all;
+            padding: 15px;
+            background: #0f172a;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        #keyDisplay:hover {
+            background: #1e3a5f;
+            transform: scale(1.02);
+        }
+        .copy-btn {
+            background: linear-gradient(135deg, #EF4444, #DC2626);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        .copy-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(239,68,68,0.4);
+        }
+        .status {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #10B981;
+        }
+        .error {
+            color: #EF4444;
+        }
+        .loading {
+            color: #FBBF24;
+        }
+        .instructions {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 13px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">HONGHAC</div>
+        <div class="subtitle">Key Distribution System</div>
+        
+        <div class="key-box">
+            <div class="key-label">Your License Key</div>
+            <div id="keyDisplay" onclick="copyKey()">Loading...</div>
+        </div>
+        
+        <button class="copy-btn" onclick="copyKey()">📋 COPY KEY</button>
+        
+        <div id="status" class="status loading">Đang lấy key...</div>
+        
+        <div class="instructions">
+            <p>1. Copy key bằng cách click vào key hoặc nút COPY</p>
+            <p>2. Paste key vào app launcher</p>
+            <p>3. Nhấn "Bắt đầu" để chạy</p>
+        </div>
+    </div>
+
+    <script>
+        // Firebase config
+        const FIREBASE_PROJECT = 'honghac-builda-keys';
+        const API_KEY = 'AIzaSyCsR_yDVQGgeqJAp5NvLWeLkPgz0scN-Xw';
+        const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents`;
+
+        let currentKey = '';
+
+        async function getKeyFromToken() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('t');
+            
+            if (!token) {
+                showError('Không tìm thấy token!');
+                return;
+            }
+
+            try {
+                // Fetch key từ tokens collection
+                const response = await fetch(`${FIRESTORE_BASE}/tokens/${token}?key=${API_KEY}`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showError('Token không hợp lệ hoặc đã hết hạn!');
+                    } else {
+                        showError(`Lỗi server: ${response.status}`);
+                    }
+                    return;
+                }
+
+                const data = await response.json();
+                
+                if (data.fields && data.fields.key) {
+                    currentKey = data.fields.key.stringValue;
+                    document.getElementById('keyDisplay').textContent = currentKey;
+                    document.getElementById('status').textContent = 'Click để copy key!';
+                    document.getElementById('status').className = 'status';
+                    
+                    // Đánh dấu token đã revealed
+                    markRevealed(token);
+                } else {
+                    showError('Không tìm thấy key trong token!');
+                }
+            } catch (error) {
+                showError('Lỗi kết nối: ' + error.message);
+            }
+        }
+
+        async function markRevealed(token) {
+            try {
+                await fetch(`${FIRESTORE_BASE}/tokens/${token}?key=${API_KEY}&updateMask.fieldPaths=revealed`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fields: { revealed: { booleanValue: true } }
+                    })
+                });
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('keyDisplay').textContent = 'ERROR';
+            document.getElementById('status').textContent = message;
+            document.getElementById('status').className = 'status error';
+        }
+
+        function copyKey() {
+            if (!currentKey) return;
+            
+            navigator.clipboard.writeText(currentKey).then(() => {
+                document.getElementById('status').textContent = '✅ Đã copy key!';
+                document.getElementById('status').className = 'status';
+                
+                // Highlight effect
+                const keyDisplay = document.getElementById('keyDisplay');
+                keyDisplay.style.color = '#FBBF24';
+                setTimeout(() => {
+                    keyDisplay.style.color = '#10B981';
+                }, 500);
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = currentKey;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                document.getElementById('status').textContent = '✅ Đã copy key!';
+            });
+        }
+
+        // Run on page load
+        document.addEventListener('DOMContentLoaded', getKeyFromToken);
+    </script>
+</body>
+</html>
